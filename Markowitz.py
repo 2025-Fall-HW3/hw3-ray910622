@@ -1,6 +1,7 @@
 """
 Package Import
 """
+
 import yfinance as yf
 import numpy as np
 import pandas as pd
@@ -37,8 +38,8 @@ end = "2024-04-01"
 # Initialize df and df_returns
 df = pd.DataFrame()
 for asset in assets:
-    raw = yf.download(asset, start=start, end=end, auto_adjust = False)
-    df[asset] = raw['Adj Close']
+    raw = yf.download(asset, start=start, end=end, auto_adjust=False)
+    df[asset] = raw["Adj Close"]
 
 df_returns = df.pct_change().fillna(0)
 
@@ -62,7 +63,16 @@ class EqualWeightPortfolio:
         """
         TODO: Complete Task 1 Below
         """
+        # Equal Weight: w_i = 1/m where m is the number of assets
+        m = len(assets)
+        equal_weight = 1.0 / m
 
+        # Assign equal weights to all assets (excluding SPY)
+        for asset in assets:
+            self.portfolio_weights[asset] = equal_weight
+
+        # Set weight for excluded asset (SPY) to 0
+        self.portfolio_weights[self.exclude] = 0
         """
         TODO: Complete Task 1 Above
         """
@@ -113,9 +123,30 @@ class RiskParityPortfolio:
         """
         TODO: Complete Task 2 Below
         """
+        # Risk Parity: w_i = (1/σ_i) / Σ(1/σ_j)
+        # 資產權重與波動性成反比
 
+        for i in range(self.lookback + 1, len(df)):
+            # 獲取歷史回報數據
+            R_n = df_returns[assets].iloc[i - self.lookback : i]
 
+            # 計算每個資產的波動性 (標準差)
+            sigma = R_n.std().values
 
+            # 防止除以零
+            sigma = np.maximum(sigma, 1e-8)
+
+            # 計算反向波動性權重: 1/σ_i
+            inverse_volatility = 1.0 / sigma
+
+            # 歸一化使總和為 1: w_i = (1/σ_i) / Σ(1/σ_j)
+            weights = inverse_volatility / np.sum(inverse_volatility)
+
+            # 分配權重
+            self.portfolio_weights.loc[df.index[i], assets] = weights
+
+        # 排除的資產 (SPY) 權重設為 0
+        self.portfolio_weights[self.exclude] = 0
         """
         TODO: Complete Task 2 Above
         """
@@ -187,12 +218,25 @@ class MeanVariancePortfolio:
                 """
                 TODO: Complete Task 3 Below
                 """
+                # Decision variables: weights for each asset
+                # Long-only constraint: 0 <= w_i <= 1
+                w = model.addMVar(n, name="w", lb=0, ub=1)
 
-                # Sample Code: Initialize Decision w and the Objective
-                # NOTE: You can modify the following code
-                w = model.addMVar(n, name="w", ub=1)
-                model.setObjective(w.sum(), gp.GRB.MAXIMIZE)
+                # Objective: max(w^T * mu - (gamma/2) * w^T * Sigma * w)
+                # In Gurobi, we convert to minimization of the negative
+                # Quadratic term: w^T * Sigma * w
+                portfolio_variance = w @ Sigma @ w
+                portfolio_return = mu @ w
 
+                # Set objective: maximize return - risk penalty
+                # Gurobi minimizes by default, so we negate
+                model.setObjective(
+                    -portfolio_return + (gamma / 2) * portfolio_variance,
+                    gp.GRB.MINIMIZE,
+                )
+
+                # Constraint: sum of weights = 1 (fully invested, no leverage)
+                model.addConstr(w.sum() == 1, name="budget")
                 """
                 TODO: Complete Task 3 Above
                 """
@@ -277,6 +321,6 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     judge = AssignmentJudge()
-    
+
     # All grading logic is protected in grader.py
     judge.run_grading(args)
