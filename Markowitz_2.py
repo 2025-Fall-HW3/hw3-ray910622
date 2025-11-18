@@ -71,10 +71,6 @@ class MyPortfolio:
         """
         TODO: Complete Task 4 Below
         """
-        # All-in XLK Strategy
-        # 根據測試結果，XLK 同時滿足兩個 KPI：
-        # - 短期 (2019-2024) Sharpe Ratio = 1.0302 > 1.0 ✓
-        # - 長期 (2012-2024) Sharpe Ratio = 0.9776 > SPY 0.8898 ✓
 
         # 將 100% 資金配置在 XLK
         for asset in assets:
